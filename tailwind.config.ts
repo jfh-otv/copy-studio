@@ -1,12 +1,15 @@
 import type { Config } from "tailwindcss";
+import path from "path";
+
+const ROOT = __dirname;
 
 const config: Config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}",
+    path.join(ROOT, "pages/**/*.{ts,tsx}"),
+    path.join(ROOT, "components/**/*.{ts,tsx}"),
+    path.join(ROOT, "app/**/*.{ts,tsx}"),
+    path.join(ROOT, "lib/**/*.{ts,tsx}"),
   ],
   theme: {
     container: {
@@ -49,6 +52,31 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        ink: {
+          DEFAULT: "hsl(var(--ink))",
+          2: "hsl(var(--ink-2))",
+          3: "hsl(var(--ink-3))",
+          4: "hsl(var(--ink-4))",
+        },
+        paper: {
+          DEFAULT: "hsl(var(--paper))",
+          2: "hsl(var(--paper-2))",
+        },
+        line: {
+          DEFAULT: "hsl(var(--line))",
+          2: "hsl(var(--line-2))",
+          3: "hsl(var(--line-3))",
+        },
+        "accent-soft": "hsl(var(--accent-soft))",
+        "accent-tint": "hsl(var(--accent-tint))",
+      },
+      fontFamily: {
+        serif: ["var(--font-serif)", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -6,11 +6,13 @@ const Schema = z
   .object({
     draft: z.string().optional(),
     points: z.array(z.string()).optional(),
-    voice: z.string(),
-    platform: z.enum(["linkedin", "x", "slide", "generic"]),
+    perPoint: z.boolean().optional(),
+    voices: z.array(z.string()).min(1),
+    platform: z.enum(["linkedin", "instagram"]),
     frameworks: z.array(z.string()),
     surpriseMe: z.boolean(),
     variantCount: z.number().int().min(1).max(5),
+    intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   })
   .refine(d => d.draft || d.points?.length, { message: "draft or points required" })
   .refine(d => d.surpriseMe || d.frameworks.length > 0, {
