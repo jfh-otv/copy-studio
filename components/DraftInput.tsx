@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { Textarea } from "@/components/ui/textarea";
 
 interface DraftInputProps {
   value: string;
@@ -14,18 +13,22 @@ export function DraftInput({ value, onChange }: DraftInputProps) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (!value) {
+      el.style.height = "";
+      return;
+    }
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    el.style.height = `${Math.max(el.scrollHeight, 200)}px`;
   }, [value]);
 
   return (
-    <Textarea
+    <textarea
       ref={ref}
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder="Paste your draft, slide text, or raw notes here…"
-      className="min-h-[200px] resize-none overflow-hidden text-base leading-relaxed"
-      style={{ height: "auto" }}
+      className="cs-textarea w-full resize-none overflow-hidden rounded-[10px] border border-line bg-card px-6 py-[22px] font-serif text-[19px] leading-[1.6] text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-4 focus:border-ink-2"
+      style={{ minHeight: 200 }}
     />
   );
 }

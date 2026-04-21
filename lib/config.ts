@@ -8,7 +8,7 @@ export type CompanyConfig = {
   logoUrl?: string;
   primaryColor: string;
   defaultVoice: string;
-  defaultPlatform: "linkedin" | "x" | "slide" | "generic";
+  defaultPlatform: "linkedin" | "instagram";
 };
 
 export type ContentCard = {

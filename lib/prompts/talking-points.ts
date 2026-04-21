@@ -8,6 +8,7 @@ Rules:
 - Deduplicate. Merge overlapping points.
 - Preserve specific numbers, names, and examples.
 - Target 5–12 points.
+- ORDER BY IMPORTANCE — most important/post-worthy first. The first 3 items must be the strongest standalone hooks.
 - Output ONLY a JSON array of strings. No prose, no preamble, no markdown fences.`;
 
 export async function extractTalkingPoints(draft: string): Promise<string[]> {

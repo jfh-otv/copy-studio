@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { DraftInput } from "@/components/DraftInput";
+import { DocumentDropzone } from "@/components/DocumentUpload";
 import { ConfigPanel, type ConfigValue } from "@/components/ConfigPanel";
 import { VariantCard } from "@/components/VariantCard";
 import { TalkingPointsPanel } from "@/components/TalkingPointsPanel";
@@ -16,18 +17,29 @@ type RemoteConfig = {
 };
 
 const EXTRACT_THRESHOLD = 2000;
+const TOP_POINTS = 3;
+
+const PLATFORM_LABELS: Record<ConfigValue["platform"], string> = {
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+};
+function platformLabelFor(p: ConfigValue["platform"]) {
+  return PLATFORM_LABELS[p] ?? p;
+}
 
 export default function Page() {
   const [remoteConfig, setRemoteConfig] = useState<RemoteConfig | null>(null);
   const [draft, setDraft] = useState("");
   const [extractedPoints, setExtractedPoints] = useState<string[]>([]);
   const [extracting, setExtracting] = useState(false);
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
   const [config, setConfig] = useState<ConfigValue>({
-    voice: "",
+    voices: [],
     platform: "linkedin",
     variantCount: 3,
     frameworks: [],
     surpriseMe: false,
+    intensity: 2,
   });
   const [variants, setVariants] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,7 +53,7 @@ export default function Page() {
         setRemoteConfig(data);
         setConfig(prev => ({
           ...prev,
-          voice: data.defaultVoice ?? data.voices[0]?.key ?? "",
+          voices: [data.defaultVoice ?? data.voices[0]?.key].filter(Boolean) as string[],
           platform: data.defaultPlatform ?? "linkedin",
         }));
       })
@@ -71,9 +83,29 @@ export default function Page() {
 
   function handleDraftChange(text: string) {
     setDraft(text);
+    if (uploadedFilename) setUploadedFilename(null);
     if (extractDebounce.current) clearTimeout(extractDebounce.current);
     extractDebounce.current = setTimeout(() => extractPoints(text), 800);
   }
+
+  function handleDocumentExtracted(text: string, filename: string) {
+    setDraft(text);
+    setUploadedFilename(filename);
+    setExtractedPoints([]);
+    if (extractDebounce.current) clearTimeout(extractDebounce.current);
+    extractPoints(text);
+  }
+
+  function handleDocumentCleared() {
+    setDraft("");
+    setUploadedFilename(null);
+    setExtractedPoints([]);
+  }
+
+  const perPointMode = extractedPoints.length >= 2;
+  const plannedVariantCount = perPointMode
+    ? Math.min(TOP_POINTS, extractedPoints.length)
+    : config.variantCount;
 
   async function handleGenerate() {
     setLoading(true);
@@ -85,11 +117,13 @@ export default function Page() {
         body: JSON.stringify({
           draft: extractedPoints.length === 0 ? draft : undefined,
           points: extractedPoints.length > 0 ? extractedPoints : undefined,
-          voice: config.voice,
+          perPoint: perPointMode,
+          voices: config.voices,
           platform: config.platform,
           frameworks: config.frameworks,
           surpriseMe: config.surpriseMe,
-          variantCount: config.variantCount,
+          variantCount: plannedVariantCount,
+          intensity: config.intensity,
         }),
       });
       const data = await res.json();
@@ -104,17 +138,23 @@ export default function Page() {
   async function handleRegenerate(variant: Variant, index: number) {
     setRegeneratingIds(prev => new Set(prev).add(variant.id));
     try {
+      const pointsForRegen =
+        perPointMode && variant.anchorPoint
+          ? [variant.anchorPoint, ...extractedPoints.filter(p => p !== variant.anchorPoint)]
+          : extractedPoints;
       const res = await fetch("/api/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draft: extractedPoints.length === 0 ? draft : undefined,
-          points: extractedPoints.length > 0 ? extractedPoints : undefined,
-          voice: config.voice,
+          points: extractedPoints.length > 0 ? pointsForRegen : undefined,
+          perPoint: perPointMode,
+          voices: [variant.appliedVoiceKey],
           platform: config.platform,
           frameworks: config.surpriseMe ? [] : [variant.appliedFrameworkKey],
           surpriseMe: config.surpriseMe,
           variantCount: 1,
+          intensity: config.intensity,
         }),
       });
       const data = await res.json();
@@ -137,93 +177,124 @@ export default function Page() {
 
   if (!remoteConfig) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">
+      <div className="flex min-h-screen items-center justify-center text-sm text-ink-4">
         Loading…
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <div
-            className="h-7 w-7 rounded-md shrink-0"
-            style={{ backgroundColor: "var(--primary-color, #1E3A5F)" }}
-          />
-          <h1 className="text-lg font-semibold tracking-tight">Copy Studio</h1>
-        </div>
-      </header>
+  const charCount = draft.length;
 
-      <main className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-          {/* Left panel */}
-          <div className="space-y-5">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Draft</label>
+  return (
+    <div className="min-h-screen bg-paper">
+      <div className="mx-auto max-w-[1280px] px-8 pb-32">
+        {/* Topbar */}
+        <header className="flex items-center justify-between border-b border-line py-5">
+          <div className="flex items-baseline gap-2.5">
+            <span className="cs-serif text-[30px] leading-none text-ink">
+              Copy Studio
+            </span>
+            <span className="text-ink-4 text-base leading-none">·</span>
+            <span className="text-[14px] text-ink-3 tracking-[0.01em]">
+              a rewriting tool
+            </span>
+          </div>
+        </header>
+
+        <main className="grid grid-cols-1 gap-14 pt-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+          {/* Left column */}
+          <div className="min-w-0 space-y-8">
+            {/* Draft */}
+            <section>
+              <div className="mb-3 flex items-baseline justify-between gap-4">
+                <h2 className="cs-headline">Draft</h2>
+                <span className="cs-meta shrink-0">
+                  {charCount.toLocaleString()} chars
+                </span>
+              </div>
               <DraftInput value={draft} onChange={handleDraftChange} />
               {extracting && (
-                <p className="text-xs text-muted-foreground mt-1.5 animate-pulse">
+                <p className="mt-2 text-xs text-ink-4 animate-pulse">
                   Extracting talking points…
                 </p>
               )}
-            </div>
-
-            {extractedPoints.length > 0 && (
-              <TalkingPointsPanel points={extractedPoints} />
-            )}
-
-            {loading && (
-              <div className="space-y-4">
-                {Array.from({ length: config.variantCount }).map((_, i) => (
-                  <VariantSkeleton key={i} />
-                ))}
-              </div>
-            )}
-
-            {!loading && variants.length > 0 && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {variants.length} variant{variants.length !== 1 ? "s" : ""} generated
+              {perPointMode && !extracting && (
+                <p className="mt-2 text-xs text-ink-3">
+                  Long input detected — will generate {plannedVariantCount} variant
+                  {plannedVariantCount !== 1 ? "s" : ""}, one per top talking point.
                 </p>
-                {variants.map((v, i) => (
-                  <VariantCard
-                    key={v.id}
-                    variant={v}
-                    index={i}
-                    onCopy={() => {}}
-                    onRegenerate={() => handleRegenerate(v, i)}
-                    regenerating={regeneratingIds.has(v.id)}
-                  />
-                ))}
-              </div>
-            )}
+              )}
+            </section>
 
-            {!loading && variants.length === 0 && (
-              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                {draft.length === 0
-                  ? "Paste a draft above, configure your settings, and click Generate."
-                  : "Click Generate to create variants."}
-              </div>
-            )}
-          </div>
+            {/* Dropzone */}
+            <DocumentDropzone
+              onExtracted={handleDocumentExtracted}
+              onCleared={handleDocumentCleared}
+              filename={uploadedFilename}
+              draftHasContent={draft.length > 0 && !uploadedFilename}
+              disabled={loading}
+            />
 
-          {/* Right panel — sticky */}
-          <div className="lg:sticky lg:top-6">
-            <div className="rounded-lg border bg-card p-5 shadow-sm">
-              <h2 className="text-sm font-semibold mb-4">Settings</h2>
-              <ConfigPanel
-                voices={remoteConfig.voices}
-                frameworks={remoteConfig.frameworks}
-                value={config}
-                onChange={setConfig}
-                onGenerate={handleGenerate}
-                loading={loading}
+            {/* Talking points */}
+            {extractedPoints.length > 0 && (
+              <TalkingPointsPanel
+                points={extractedPoints}
+                topN={perPointMode ? plannedVariantCount : 0}
               />
-            </div>
+            )}
+
+            {/* Variants — editorial heading */}
+            {(loading || variants.length > 0) && (
+              <section>
+                <div className="mb-5 flex items-baseline justify-between gap-4 border-t border-line pt-8">
+                  <h2 className="cs-headline">Variants</h2>
+                  <span className="cs-meta shrink-0">
+                    {loading
+                      ? `generating ${plannedVariantCount}…`
+                      : `${variants.length} of ${variants.length} · just now`}
+                  </span>
+                </div>
+
+                {loading && (
+                  <div className="space-y-5">
+                    {Array.from({ length: plannedVariantCount }).map((_, i) => (
+                      <VariantSkeleton key={i} index={i} />
+                    ))}
+                  </div>
+                )}
+
+                {!loading && variants.length > 0 && (
+                  <div className="space-y-5">
+                    {variants.map((v, i) => (
+                      <VariantCard
+                        key={v.id}
+                        variant={v}
+                        index={i}
+                        platformLabel={platformLabelFor(config.platform)}
+                        onCopy={() => {}}
+                        onRegenerate={() => handleRegenerate(v, i)}
+                        regenerating={regeneratingIds.has(v.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
-        </div>
-      </main>
+
+          {/* Right column — sticky settings */}
+          <aside className="lg:sticky lg:top-8 lg:self-start">
+            <ConfigPanel
+              voices={remoteConfig.voices}
+              frameworks={remoteConfig.frameworks}
+              value={config}
+              onChange={setConfig}
+              onGenerate={handleGenerate}
+              loading={loading}
+            />
+          </aside>
+        </main>
+      </div>
     </div>
   );
 }
